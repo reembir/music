@@ -3,82 +3,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מסיבת צבעים</title>
+    <title>Beat Visualizer - GitHub Pages</title>
     <style>
         body {
             margin: 0;
-            overflow: hidden;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            background-color: #000;
-            transition: background-color 0.05s ease; /* מעבר חלק ומהיר */
+            background-color: #111;
+            color: white;
+            font-family: system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+            transition: background-color 0.15s ease;
         }
-        button {
+
+        #startBtn {
             padding: 20px 40px;
-            font-size: 24px;
+            font-size: 1.5rem;
+            font-weight: bold;
             cursor: pointer;
-            z-index: 10;
             border: none;
             border-radius: 50px;
-            background: white;
+            background: linear-gradient(45deg, #ff00cc, #3333ff);
+            color: white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+        }
+
+        #startBtn:hover {
+            transform: scale(1.1);
+        }
+
+        /* מד עוצמה קטן בתחתית המסך כדי לראות שהמיקרופון עובד */
+        #meter-container {
+            position: fixed;
+            bottom: 20px;
+            width: 200px;
+            height: 10px;
+            background: #333;
+            border-radius: 5px;
+            display: none;
+        }
+
+        #meter-bar {
+            width: 0%;
+            height: 100%;
+            background: #00ff00;
+            border-radius: 5px;
+            transition: width 0.1s;
         }
     </style>
 </head>
 <body>
 
-    <button id="startBtn">התחל מסיבה! 🎤</button>
+    <button id="startBtn">לחץ להתחלת המסיבה 🎵</button>
+    
+    <div id="meter-container">
+        <div id="meter-bar"></div>
+    </div>
 
     <script>
         const startBtn = document.getElementById('startBtn');
-        let audioContext, analyser, dataArray;
+        const meterContainer = document.getElementById('meter-container');
+        const meterBar = document.getElementById('meter-bar');
+
+        let audioContext;
+        let analyser;
+        let dataArray;
+        let lastBeatTime = 0;
+
+        // הגדרות רגישות - אפשר לשנות כאן
+        const SENSITIVITY = 70;      // כמה חזק צריך להיות הרעש (0-255)
+        const BEAT_COOLDOWN = 180;   // זמן המתנה במילי-שניות בין צבע לצבע
 
         startBtn.addEventListener('click', async () => {
-            // הסרת הכפתור לאחר הלחיצה
-            startBtn.style.display = 'none';
-
             try {
-                // קבלת גישה למיקרופון
+                // בקשת גישה למיקרופון
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 
+                // הסתרת הכפתור והצגת המד
+                startBtn.style.display = 'none';
+                meterContainer.style.display = 'block';
+
+                // הקמת מערכת האודיו
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioContext.createMediaStreamSource(stream);
                 analyser = audioContext.createAnalyser();
                 
-                // הגדרות ניתוח
+                // הגדרות ניתוח - נתמקד בתדרים נמוכים (בס)
                 analyser.fftSize = 256;
                 const bufferLength = analyser.frequencyBinCount;
                 dataArray = new Uint8Array(bufferLength);
 
                 source.connect(analyser);
-                detectBeat();
+                
+                update();
             } catch (err) {
-                alert("חייבים לאשר גישה למיקרופון כדי שהאתר יעבוד.");
+                console.error(err);
+                alert("שגיאה: וודא שאישרת גישה למיקרופון ושאתה גולש ב-HTTPS.");
             }
         });
 
-        function detectBeat() {
+        function update() {
+            requestAnimationFrame(update);
+            
             analyser.getByteFrequencyData(dataArray);
 
-            // חישוב ממוצע עוצמת הקול
+            // חישוב עוצמה ממוצעת
             let sum = 0;
             for (let i = 0; i < dataArray.length; i++) {
                 sum += dataArray[i];
             }
             let average = sum / dataArray.length;
 
-            // אם העוצמה חזקה מספיק (שינוי ה-100 לפי הרגישות הרצויה)
-            if (average > 60) { 
-                changeColor();
-            }
+            // עדכון המד הויזואלי הקטן
+            meterBar.style.width = (average * 2) + "%";
 
-            requestAnimationFrame(detectBeat);
+            // זיהוי קצב
+            const now = Date.now();
+            if (average > SENSITIVITY && (now - lastBeatTime) > BEAT_COOLDOWN) {
+                changeColor();
+                lastBeatTime = now;
+            }
         }
 
         function changeColor() {
+            // בחירת גוון אקראי (Hue)
             const hue = Math.floor(Math.random() * 360);
-            // שימוש ב-HSL לצבעים בוהקים (S=100%, L=50%)
+            // הגדלת הרוויה (100%) והבהירות (50%) לצבעים חזקים
             document.body.style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
         }
     </script>
