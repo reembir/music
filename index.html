@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מסיבת צבעים</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000;
+            transition: background-color 0.05s ease; /* מעבר חלק ומהיר */
+        }
+        button {
+            padding: 20px 40px;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 10;
+            border: none;
+            border-radius: 50px;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="startBtn">התחל מסיבה! 🎤</button>
+
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        let audioContext, analyser, dataArray;
+
+        startBtn.addEventListener('click', async () => {
+            // הסרת הכפתור לאחר הלחיצה
+            startBtn.style.display = 'none';
+
+            try {
+                // קבלת גישה למיקרופון
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(stream);
+                analyser = audioContext.createAnalyser();
+                
+                // הגדרות ניתוח
+                analyser.fftSize = 256;
+                const bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+
+                source.connect(analyser);
+                detectBeat();
+            } catch (err) {
+                alert("חייבים לאשר גישה למיקרופון כדי שהאתר יעבוד.");
+            }
+        });
+
+        function detectBeat() {
+            analyser.getByteFrequencyData(dataArray);
+
+            // חישוב ממוצע עוצמת הקול
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            let average = sum / dataArray.length;
+
+            // אם העוצמה חזקה מספיק (שינוי ה-100 לפי הרגישות הרצויה)
+            if (average > 60) { 
+                changeColor();
+            }
+
+            requestAnimationFrame(detectBeat);
+        }
+
+        function changeColor() {
+            const hue = Math.floor(Math.random() * 360);
+            // שימוש ב-HSL לצבעים בוהקים (S=100%, L=50%)
+            document.body.style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
+        }
+    </script>
+</body>
+</html>
