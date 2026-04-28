@@ -3,138 +3,200 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Beat Visualizer - GitHub Pages</title>
+    <title>מסיבת צבעים בהתאמה אישית</title>
     <style>
+        :root {
+            --primary: #6366f1;
+            --bg: #0f172a;
+        }
+
         body {
             margin: 0;
             padding: 0;
             width: 100vw;
             height: 100vh;
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
-            background-color: #111;
+            background-color: var(--bg);
             color: white;
-            font-family: system-ui, -apple-system, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow: hidden;
-            transition: background-color 0.15s ease;
+            transition: background-color 0.1s ease;
+        }
+
+        /* מסך הגדרות */
+        #setup-container {
+            background: rgba(30, 41, 59, 0.9);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 400px;
+            width: 90%;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        h2 { margin-top: 0; text-align: center; color: #f8fafc; }
+
+        .setting-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+
+        .description {
+            font-size: 0.8rem;
+            color: #cbd5e1;
+            margin-bottom: 8px;
+            line-height: 1.3;
+        }
+
+        input[type="range"], select {
+            width: 100%;
+            cursor: pointer;
         }
 
         #startBtn {
-            padding: 20px 40px;
-            font-size: 1.5rem;
+            width: 100%;
+            padding: 15px;
+            font-size: 1.2rem;
             font-weight: bold;
-            cursor: pointer;
             border: none;
-            border-radius: 50px;
-            background: linear-gradient(45deg, #ff00cc, #3333ff);
+            border-radius: 10px;
+            background: var(--primary);
             color: white;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            transition: transform 0.2s;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s;
         }
 
         #startBtn:hover {
-            transform: scale(1.1);
+            background: #4f46e5;
+            transform: scale(1.02);
         }
 
-        /* מד עוצמה קטן בתחתית המסך כדי לראות שהמיקרופון עובד */
-        #meter-container {
+        #visualizer-ui {
+            display: none;
             position: fixed;
             bottom: 20px;
-            width: 200px;
-            height: 10px;
-            background: #333;
-            border-radius: 5px;
-            display: none;
-        }
-
-        #meter-bar {
-            width: 0%;
-            height: 100%;
-            background: #00ff00;
-            border-radius: 5px;
-            transition: width 0.1s;
+            text-align: center;
         }
     </style>
 </head>
 <body>
 
-    <button id="startBtn">לחץ להתחלת המסיבה 🎵</button>
-    
-    <div id="meter-container">
-        <div id="meter-bar"></div>
+    <div id="setup-container">
+        <h2>הגדרות מסיבה 🕺</h2>
+
+        <div class="setting-group">
+            <label>בחירת צבעים:</label>
+            <p class="description">אקראי יחליף לכל צבע אפשרי. אפשר לבחור גוונים ספציפיים לאווירה מסוימת.</p>
+            <select id="colorMode">
+                <option value="random">אקראי לחלוטין (כל הצבעים)</option>
+                <option value="warm">צבעים חמים (אדום, כתום, צהוב)</option>
+                <option value="cool">צבעים קרים (כחול, סגול, תכלת)</option>
+                <option value="neon">צבעי ניאון (ירוק, ורוד, צהוב זרחני)</option>
+            </select>
+        </div>
+
+        <div class="setting-group">
+            <label>רגישות מיקרופון:</label>
+            <p class="description">כמה "חזק" השיר צריך להיות כדי שהצבע יתחלף. (נמוך = מגיב לכל רעש, גבוה = רק לבאסים חזקים).</p>
+            <input type="range" id="sensitivity" min="30" max="150" value="80">
+        </div>
+
+        <div class="setting-group">
+            <label>קצב החלפה מקסימלי:</label>
+            <p class="description">זמן המתנה בין החלפות. מונע הבהובים מהירים מדי שעלולים להציק בעיניים.</p>
+            <input type="range" id="cooldown" min="100" max="1000" step="50" value="200">
+        </div>
+
+        <button id="startBtn">התחל מסיבה! 🎤</button>
+    </div>
+
+    <div id="visualizer-ui">
+        <p>המסיבה רצה... השמע מוזיקה!</p>
     </div>
 
     <script>
         const startBtn = document.getElementById('startBtn');
-        const meterContainer = document.getElementById('meter-container');
-        const meterBar = document.getElementById('meter-bar');
+        const setupContainer = document.getElementById('setup-container');
+        
+        let audioContext, analyser, dataArray;
+        
+        // משתני הגדרות שימשכו מה-UI
+        let config = {
+            colorMode: 'random',
+            sensitivity: 80,
+            cooldown: 200
+        };
 
-        let audioContext;
-        let analyser;
-        let dataArray;
         let lastBeatTime = 0;
 
-        // הגדרות רגישות - אפשר לשנות כאן
-        const SENSITIVITY = 70;      // כמה חזק צריך להיות הרעש (0-255)
-        const BEAT_COOLDOWN = 180;   // זמן המתנה במילי-שניות בין צבע לצבע
-
         startBtn.addEventListener('click', async () => {
-            try {
-                // בקשת גישה למיקרופון
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                
-                // הסתרת הכפתור והצגת המד
-                startBtn.style.display = 'none';
-                meterContainer.style.display = 'block';
+            // שמירת ההגדרות מהטופס
+            config.colorMode = document.getElementById('colorMode').value;
+            config.sensitivity = parseInt(document.getElementById('sensitivity').value);
+            config.cooldown = parseInt(document.getElementById('cooldown').value);
 
-                // הקמת מערכת האודיו
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                setupContainer.style.display = 'none';
+                document.getElementById('visualizer-ui').style.display = 'block';
+
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioContext.createMediaStreamSource(stream);
                 analyser = audioContext.createAnalyser();
-                
-                // הגדרות ניתוח - נתמקד בתדרים נמוכים (בס)
                 analyser.fftSize = 256;
-                const bufferLength = analyser.frequencyBinCount;
-                dataArray = new Uint8Array(bufferLength);
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
 
                 source.connect(analyser);
-                
-                update();
+                detect();
             } catch (err) {
-                console.error(err);
-                alert("שגיאה: וודא שאישרת גישה למיקרופון ושאתה גולש ב-HTTPS.");
+                alert("חובה לאשר מיקרופון");
             }
         });
 
-        function update() {
-            requestAnimationFrame(update);
-            
+        function detect() {
+            requestAnimationFrame(detect);
             analyser.getByteFrequencyData(dataArray);
 
-            // חישוב עוצמה ממוצעת
+            // חישוב ממוצע עוצמה
             let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) {
-                sum += dataArray[i];
-            }
+            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
             let average = sum / dataArray.length;
 
-            // עדכון המד הויזואלי הקטן
-            meterBar.style.width = (average * 2) + "%";
-
-            // זיהוי קצב
             const now = Date.now();
-            if (average > SENSITIVITY && (now - lastBeatTime) > BEAT_COOLDOWN) {
+            if (average > config.sensitivity && (now - lastBeatTime) > config.cooldown) {
                 changeColor();
                 lastBeatTime = now;
             }
         }
 
         function changeColor() {
-            // בחירת גוון אקראי (Hue)
-            const hue = Math.floor(Math.random() * 360);
-            // הגדלת הרוויה (100%) והבהירות (50%) לצבעים חזקים
+            let hue;
+            
+            // לוגיקה לבחירת צבע לפי המצב שנבחר
+            switch(config.colorMode) {
+                case 'warm':
+                    hue = Math.floor(Math.random() * 60); // 0-60 זה אדום עד צהוב
+                    break;
+                case 'cool':
+                    hue = Math.floor(Math.random() * (300 - 180) + 180); // 180-300 זה כחולים וסגולים
+                    break;
+                case 'neon':
+                    const neonHues = [300, 120, 60, 180]; // ורוד, ירוק, צהוב, ציאן
+                    hue = neonHues[Math.floor(Math.random() * neonHues.length)];
+                    break;
+                default:
+                    hue = Math.floor(Math.random() * 360); // הכל
+            }
+
             document.body.style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
         }
     </script>
